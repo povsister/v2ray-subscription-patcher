@@ -471,6 +471,13 @@ func (p *Patcher) prepareDnsRtConnTrackRoutingRules() error {
 			finalRoutingRules = slices.Insert(finalRoutingRules, 0, rule)
 			continue
 		}
+		// 常用兜底写法，不处理
+		if !src.Exists() && !dst.Exists() {
+			if rule.Get("network").String() == "tcp,udp" {
+				finalRoutingRules = slices.Insert(finalRoutingRules, 0, rule)
+				continue
+			}
+		}
 		// 自动添加 conn-track rule
 		if outTag.Exists() {
 			regionSuffix = strings.TrimPrefix(outTag.String(), autoSetupOutboundPrefix)
