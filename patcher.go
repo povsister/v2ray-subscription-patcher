@@ -353,7 +353,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
         "type": "default",
         "tag": "%s",
         "settings": {
-          "subjectSelector": "%s:",
+          "subjectSelector": ["%s:"],
           "probeURL": "https://www.cloudflarestatus.com/api/v2/status.json",
           "probeInterval": "60s"
         }
@@ -367,7 +367,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 		p.newBalancers = append(p.newBalancers,
 			gjson.Parse(fmt.Sprintf(`      { // Auto-Generated from dnsCircuit.balancerTag = %s
         "tag": "%s",
-        "selector": "%s:",
+        "selector": ["%s:"],
         "strategy": {
           "type": "leastping",
           "settings": {
