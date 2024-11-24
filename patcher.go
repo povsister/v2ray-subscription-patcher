@@ -50,6 +50,7 @@ func NewPatcher() *Patcher {
 }
 
 func (p *Patcher) ReadPrevConfig() error {
+	slog.Info(fmt.Sprintf("Reading v2ray config file: %s", v2rayConfigPath))
 	f, err := os.ReadFile(v2rayConfigPath)
 	if err != nil {
 		return err
@@ -165,6 +166,10 @@ func (p *Patcher) retrieveDnsRtTags() error {
 	for region := range p.dnsRtAllRegionSuffix {
 		p.dnsRtAllRegionSuffixSlc = append(p.dnsRtAllRegionSuffixSlc, region)
 	}
+	if len(p.dnsRtAllRegionSuffixSlc) > 0 {
+		slog.Info(fmt.Sprintf("Retrieved %d region suffix from dnsCircuit outboundTags/balancerTags: %v",
+			len(p.dnsRtAllRegionSuffixSlc), p.dnsRtAllRegionSuffixSlc))
+	}
 	return nil
 }
 
@@ -205,6 +210,8 @@ func (p *Patcher) retrieveOutbounds(sub *Subscription) error {
 			firstOutbound.Get("tag").String(), newOutbounds[0].Get("tag").String()))
 	}
 	p.newOutbounds = newOutbounds
+	slog.Info(fmt.Sprintf("Processing outbounds ... found&removed %d auto-generated and preserve %d customized outbounds",
+		len(proxyNodes), len(p.newOutbounds)))
 	return nil
 }
 
@@ -219,6 +226,7 @@ func (p *Patcher) retrieveBalancers() error {
 
 	var (
 		newBalancers []gjson.Result
+		removedCnt   int
 	)
 	p.fallbackMap = make(map[string]string)
 	balancers.ForEach(func(idx, balancer gjson.Result) (next bool) {
@@ -234,9 +242,12 @@ func (p *Patcher) retrieveBalancers() error {
 		if len(fallbackTag) > 0 {
 			p.lastFallbackTag = fallbackTag
 		}
+		removedCnt++
 		return
 	})
 	p.newBalancers = newBalancers
+	slog.Info(fmt.Sprintf("Processing balancers ... found&removed %d auto-generated and preserve %d customized balancers",
+		removedCnt, len(p.newBalancers)))
 	return nil
 }
 
@@ -251,6 +262,7 @@ func (p *Patcher) retrieveObservatory() error {
 
 	var (
 		newObservers []gjson.Result
+		removedCnt   int
 	)
 	observatories.ForEach(func(idx, observer gjson.Result) (next bool) {
 		next = true
@@ -258,9 +270,12 @@ func (p *Patcher) retrieveObservatory() error {
 		if !strings.HasPrefix(tag, autoSetupObserverPrefix) {
 			newObservers = append(newObservers, observer)
 		}
+		removedCnt++
 		return
 	})
 	p.newObservers = newObservers
+	slog.Info(fmt.Sprintf("Processing observatories ... found&removed %d auto-generated and preserve %d customized observatories",
+		removedCnt, len(p.newObservers)))
 	return nil
 }
 
@@ -279,7 +294,8 @@ func (p *Patcher) retrieveRoutingRules() error {
 		return fmt.Errorf(pathRoutingRules + " is not an array")
 	}
 	var (
-		newRules []gjson.Result
+		newRules   []gjson.Result
+		removedCnt int
 	)
 	rules.ForEach(func(idx, rule gjson.Result) (next bool) {
 		next = true
@@ -301,17 +317,21 @@ func (p *Patcher) retrieveRoutingRules() error {
 		outTag, balaTag := rule.Get("outboundTag"), rule.Get("balancerTag")
 		if outTag.Exists() {
 			if strings.HasPrefix(outTag.String(), autoSetupOutboundPrefix) {
+				removedCnt++
 				return
 			}
 		}
 		if balaTag.Exists() {
 			if strings.HasPrefix(balaTag.String(), autoSetupBalancerPrefix) {
+				removedCnt++
 				return
 			}
 		}
 		return
 	})
 	p.newRoutingRules = newRules
+	slog.Info(fmt.Sprintf("Processing routingRules ... found&removed %d auto-generated and preserve %d customized routingRules",
+		removedCnt, len(p.newRoutingRules)))
 	return nil
 }
 
@@ -319,6 +339,9 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 	if len(p.dnsRtBalancers) <= 0 {
 		return nil
 	}
+	var (
+		addedCnt int
+	)
 	for _, balancerTag := range p.dnsRtBalancers {
 		if !strings.HasPrefix(balancerTag, autoSetupBalancerPrefix) {
 			continue
@@ -340,6 +363,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 		if len(fallbackTag) <= 0 {
 			fallbackTag = p.lastFallbackTag
 		}
+		addedCnt++
 		p.newBalancers = append(p.newBalancers,
 			gjson.Parse(fmt.Sprintf(`      { // Auto-Generated from dnsCircuit.balancerTag = %s
         "tag": "%s",
@@ -354,6 +378,9 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
       }`, balancerTag, balancerTag, autoSetupOutboundPrefix+regionSuffix,
 				autoSetupObserverPrefix+regionSuffix, fallbackTag)))
 	}
+	if addedCnt > 0 {
+		slog.Info(fmt.Sprintf("Preparing new observatories and balancers ... added %d auto-generated items", addedCnt))
+	}
 	return nil
 }
 
@@ -362,6 +389,9 @@ func (p *Patcher) prepareOutbounds() (err error) {
 	if err != nil {
 		return fmt.Errorf("failed to complie outbound matcher rgx: %w", err)
 	}
+	var (
+		addedCnt int
+	)
 	for subId, subItem := range p.VmessServers {
 		tldPlus1, err := publicsuffix.EffectiveTLDPlusOne(subItem.VmessConf.Addr)
 		if err != nil {
@@ -376,6 +406,7 @@ func (p *Patcher) prepareOutbounds() (err error) {
 					subId, m))
 				continue
 			}
+			addedCnt++
 			p.newOutbounds = append(p.newOutbounds,
 				gjson.Parse(fmt.Sprintf(`    {
       "tag": "%s", // Auto-Generated from %s
@@ -412,6 +443,9 @@ func (p *Patcher) prepareOutbounds() (err error) {
 					subItem.VmessConf.Addr, subItem.VmessConf.Port, subItem.VmessConf.UUID, subItem.VmessConf.AlterId)))
 		}
 	}
+	if addedCnt > 0 {
+		slog.Info(fmt.Sprintf("Preparing new outbounds ... added %d auto-generated items", addedCnt))
+	}
 	return nil
 }
 
@@ -420,6 +454,7 @@ func (p *Patcher) prepareDnsRtConnTrackRoutingRules() error {
 		finalRoutingRules []gjson.Result
 		processedOutTags  = make(map[string]bool)
 		processedBalaTags = make(map[string]bool)
+		addedCnt          int
 	)
 	for i := len(p.newRoutingRules) - 1; i >= 0; i-- {
 		rule := p.newRoutingRules[i]
@@ -477,11 +512,14 @@ func (p *Patcher) prepareDnsRtConnTrackRoutingRules() error {
 		if err != nil {
 			return fmt.Errorf("failed to set tag for generated routingeRule: %w", err)
 		}
-
+		addedCnt++
 		finalRoutingRules = slices.Insert(finalRoutingRules, 0,
 			rule, gjson.ParseBytes(gRuleBytes))
 	}
 	p.newRoutingRules = finalRoutingRules
+	if addedCnt > 0 {
+		slog.Info(fmt.Sprintf("Preparing new routingRules ... added %d auto-generated items", addedCnt))
+	}
 	return nil
 }
 
@@ -512,7 +550,11 @@ func (p *Patcher) writeOutPatchedResult() (err error) {
 		}
 	}
 	err = os.WriteFile(v2rayConfigPath, p.Output, 0644)
-
+	if err != nil {
+		slog.Error(fmt.Sprintf("Failed to write out patched file: %v", err))
+	} else {
+		slog.Info(fmt.Sprintf("Successfully wrote out patched file: %s", v2rayConfigPath))
+	}
 	return
 }
 
