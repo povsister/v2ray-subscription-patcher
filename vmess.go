@@ -30,6 +30,8 @@ func (m *SubItem) RetrieveVmessConf() error {
 	if err != nil {
 		return err
 	}
+	//buf, _ := json.MarshalIndent(c, "", "  ")
+	//fmt.Println(string(buf))
 	m.VmessConf = c
 	return nil
 }

@@ -13,7 +13,6 @@ import (
 
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
-	"golang.org/x/net/publicsuffix"
 )
 
 var (
@@ -393,14 +392,15 @@ func (p *Patcher) prepareOutbounds() (err error) {
 		addedCnt int
 	)
 	for subId, subItem := range p.VmessServers {
-		tldPlus1, err := publicsuffix.EffectiveTLDPlusOne(subItem.VmessConf.Addr)
-		if err != nil {
-			slog.Warn(fmt.Sprintf("invalid domain found in subscription result: %s", string(subItem.VmessRaw)))
-			continue
-		}
-		itemAddrId := strings.TrimSuffix(subItem.VmessConf.Addr, tldPlus1)
-		itemAddrId = strings.TrimSuffix(itemAddrId, ".")
-		if m := rgx.FindAllString(itemAddrId, -1); len(m) > 0 {
+		//tldPlus1, err := publicsuffix.EffectiveTLDPlusOne(subItem.VmessConf.Addr)
+		//if err != nil {
+		//	slog.Warn(fmt.Sprintf("invalid domain found in subscription result: %s", string(subItem.VmessRaw)))
+		//	continue
+		//}
+		//itemAddrId := strings.TrimSuffix(subItem.VmessConf.Addr, tldPlus1)
+		//itemAddrId = strings.TrimSuffix(itemAddrId, ".")
+		serverName := strings.ToLower(strings.ReplaceAll(subItem.VmessConf.ServerName, " ", "-"))
+		if m := rgx.FindAllString(serverName, -1); len(m) > 0 {
 			if len(m) > 1 {
 				slog.Warn(fmt.Sprintf("Vmess server %s matches more than one pattern from dnsCircuit balancerTags/outboundTags(%v). skipped.",
 					subId, m))
@@ -438,7 +438,7 @@ func (p *Patcher) prepareOutbounds() (err error) {
       "mux": {
         "enabled": true
       }
-    }`, autoSetupOutboundPrefix+m[0]+":"+itemAddrId+fmt.Sprintf("-p%d", subItem.VmessConf.Port),
+    }`, autoSetupOutboundPrefix+m[0]+":"+serverName+fmt.Sprintf("-p%d", subItem.VmessConf.Port),
 					subId,
 					subItem.VmessConf.Addr, subItem.VmessConf.Port, subItem.VmessConf.UUID, subItem.VmessConf.AlterId)))
 		}
