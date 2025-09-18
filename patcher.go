@@ -349,7 +349,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 		suffixSplit := strings.Split(regionSuffix, "|")
 		sls := make([]string, 0, len(suffixSplit))
 		for _, suffix := range suffixSplit {
-			sls = append(sls, fmt.Sprintf("\"%s%s\"", autoSetupOutboundPrefix, suffix))
+			sls = append(sls, fmt.Sprintf("\"%s%s:\"", autoSetupOutboundPrefix, suffix))
 		}
 		outBoundSelector := strings.Join(sls, ", ")
 		// observatory
