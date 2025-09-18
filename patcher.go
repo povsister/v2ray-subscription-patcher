@@ -383,6 +383,8 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 	return nil
 }
 
+var suffixTrimer = regexp.MustCompile(`\s*\([^)]*\)\s*`)
+
 func (p *Patcher) prepareOutbounds() (err error) {
 	rgx, err := regexp.Compile(strings.Join(p.dnsRtAllRegionSuffixSlc, "|"))
 	if err != nil {
@@ -399,7 +401,7 @@ func (p *Patcher) prepareOutbounds() (err error) {
 		//}
 		//itemAddrId := strings.TrimSuffix(subItem.VmessConf.Addr, tldPlus1)
 		//itemAddrId = strings.TrimSuffix(itemAddrId, ".")
-		serverName := strings.ToLower(strings.ReplaceAll(subItem.VmessConf.ServerName, " ", "-"))
+		serverName := strings.ToLower(strings.ReplaceAll(suffixTrimer.ReplaceAllString(subItem.VmessConf.ServerName, ""), " ", "-"))
 		if m := rgx.FindAllString(serverName, -1); len(m) > 0 {
 			if len(m) > 1 {
 				slog.Warn(fmt.Sprintf("Vmess server %s matches more than one pattern from dnsCircuit balancerTags/outboundTags(%v). skipped.",
