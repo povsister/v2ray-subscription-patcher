@@ -346,17 +346,23 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 			continue
 		}
 		regionSuffix := strings.TrimPrefix(balancerTag, autoSetupBalancerPrefix)
+		suffixSplit := strings.Split(regionSuffix, "|")
+		sls := make([]string, 0, len(suffixSplit))
+		for _, suffix := range suffixSplit {
+			sls = append(sls, fmt.Sprintf("%s%q:", autoSetupOutboundPrefix, suffix))
+		}
+		outBoundSelector := strings.Join(sls, ", ")
 		// observatory
 		p.newObservers = append(p.newObservers,
 			gjson.Parse(fmt.Sprintf(`      { // Auto-generated from dnsCircuit.balancerTag = %s
         "type": "default",
         "tag": "%s",
         "settings": {
-          "subjectSelector": ["%s:"],
+          "subjectSelector": [%s],
           "probeURL": "https://www.cloudflarestatus.com/api/v2/status.json",
           "probeInterval": "60s"
         }
-      }`, balancerTag, autoSetupObserverPrefix+regionSuffix, autoSetupOutboundPrefix+regionSuffix)))
+      }`, balancerTag, autoSetupObserverPrefix+regionSuffix, outBoundSelector)))
 		// balancers
 		fallbackTag := p.fallbackMap[balancerTag]
 		if len(fallbackTag) <= 0 {
@@ -366,7 +372,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
 		p.newBalancers = append(p.newBalancers,
 			gjson.Parse(fmt.Sprintf(`      { // Auto-Generated from dnsCircuit.balancerTag = %s
         "tag": "%s",
-        "selector": ["%s:"],
+        "selector": [%s],
         "strategy": {
           "type": "leastping",
           "settings": {
@@ -374,7 +380,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
           }
         },
         "fallbackTag": "%s"
-      }`, balancerTag, balancerTag, autoSetupOutboundPrefix+regionSuffix,
+      }`, balancerTag, balancerTag, outBoundSelector,
 				autoSetupObserverPrefix+regionSuffix, fallbackTag)))
 	}
 	if addedCnt > 0 {
