@@ -360,7 +360,7 @@ func (p *Patcher) prepareObservatoryAndBalancers() error {
         "settings": {
           "subjectSelector": [%s],
           "probeURL": "https://www.cloudflarestatus.com/api/v2/status.json",
-          "probeInterval": "60s"
+          "probeInterval": "10s"
         }
       }`, balancerTag, autoSetupObserverPrefix+regionSuffix, outBoundSelector)))
 		// balancers
